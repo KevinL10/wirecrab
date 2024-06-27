@@ -1,4 +1,6 @@
-use std::net::Ipv4Addr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
+
+mod dns;
 
 const WIFI_DEVICE: &str = "en0";
 
@@ -147,6 +149,11 @@ fn hex(data: &[u8]) -> String {
         .collect::<String>()
 }
 
+// Returns the domain name for the IP if one exists; otherwise return the ip back as a String
+fn translate_ip(ip: Ipv4Addr) -> String {
+    dns::reverse_lookup(ip).unwrap_or(ip.to_string())
+}
+
 fn main() {
     let devices = pcap::Device::list().expect("devices lookup failed");
 
@@ -163,23 +170,19 @@ fn main() {
         .unwrap();
 
     cap.filter("src port 80 or src port 443", true).unwrap();
-    cap.filter("host www.testingmcafeesites.com", true).unwrap();
+    // cap.filter("host www.testingmcafeesites.com", true).unwrap();
 
-    let mut count = 0;
+    // let mut count = 0;
     cap.for_each(None, |packet| {
         let frame = parse_ethernet_frame(packet.data);
         let packet = parse_ipv4_packet(frame.payload);
 
         println!(
             "connection from {:?} to {:?} on protocol {:?}",
-            packet.src, packet.dst, packet.protocol
+            translate_ip(packet.src),
+            translate_ip(packet.dst),
+            packet.protocol
         );
-
-        // println!("{:?}", packet);
-        count += 1;
-        if count > 100 {
-            panic!("got 100 packets");
-        }
     })
     .unwrap();
 }
