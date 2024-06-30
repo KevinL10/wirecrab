@@ -5,8 +5,8 @@ use std::net::UdpSocket;
 
 // Google's DNS server
 // TODO: replace with local DNS server
-// const DNS_SERVER: &str = "8.8.8.8:53";
-const DNS_SERVER: &str = "192.168.2.1:53";
+const DNS_SERVER: &str = "8.8.8.8:53";
+// const DNS_SERVER: &str = "192.168.2.1:53";
 
 // https://www.ietf.org/rfc/rfc1035.txt - section 4.1
 fn build_reverse_packet(addr: Ipv4Addr) -> Vec<u8> {
