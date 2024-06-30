@@ -1,86 +1,120 @@
-use std::io::{stdout, Result};
+use core::time;
+use std::{
+    io,
+    sync::{Arc, Mutex},
+    thread,
+};
 
 use ratatui::{
-    backend::CrosstermBackend,
-    crossterm::{
-        event::{self, KeyCode, KeyEventKind},
-        terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-        ExecutableCommand,
-    },
+    buffer::Buffer,
+    crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
+    layout::{Alignment, Rect},
     style::Stylize,
-    widgets::Paragraph,
-    Terminal,
+    symbols::border,
+    text::{Line, Text},
+    widgets::{
+        block::{Position, Title},
+        Block, Paragraph, Widget,
+    },
+    Frame,
 };
 
 mod dns;
 mod ethernet;
 mod ip;
+mod sniffer;
+mod tui;
 mod utils;
 
-const WIFI_DEVICE: &str = "en0";
-
-fn capture_packets() {
-    println!("starting capture");
-    let devices = pcap::Device::list().expect("devices lookup failed");
-
-    // get the wifi device
-    let device = devices
-        .into_iter()
-        .find(|d| d.name == WIFI_DEVICE)
-        .expect("could not get wifi device");
-
-    println!("chose device {:?}", device);
-
-    let mut cap = pcap::Capture::from_device(device)
-        .expect("failed to get capture")
-        .immediate_mode(true)
-        .open()
-        .unwrap();
-
-    cap.filter("src port 80 or src port 443", true).unwrap();
-    // cap.filter("host www.testingmcafeesites.com", true).unwrap();
-
-    // let mut count = 0;
-    cap.for_each(None, |packet| {
-        let frame = ethernet::parse_ethernet_frame(packet.data);
-        let packet = ip::parse_ipv4_packet(frame.payload);
-
-        println!(
-            "connection from {:?} to {:?} on protocol {:?}",
-            ip::translate_ip(packet.src),
-            ip::translate_ip(packet.dst),
-            packet.protocol
-        );
-    })
-    .unwrap();
+#[derive(Debug, Default)]
+pub struct App {
+    hosts: Arc<Mutex<Vec<String>>>,
+    exit: bool,
 }
 
-fn main() -> Result<()> {
-    stdout().execute(EnterAlternateScreen)?;
-    enable_raw_mode()?;
-    let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
-    terminal.clear()?;
+impl App {
+    /// runs the application's main loop until the user quits
+    pub fn run(&mut self, terminal: &mut tui::Tui) -> io::Result<()> {
+        // initialize hosts
+        let hosts: Vec<String> = Vec::new();
+        self.hosts = Arc::new(Mutex::new(hosts));
 
-    loop {
-        terminal.draw(|frame| {
-            let area = frame.size();
-            frame.render_widget(
-                Paragraph::new("Hello Ratatui! (press 'q' to quit)")
-                    .white()
-                    .on_blue(),
-                area,
-            );
-        })?;
-        if event::poll(std::time::Duration::from_millis(16))? {
-            if let event::Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('q') {
-                    break;
-                }
+        let hosts_cloned = self.hosts.clone();
+        thread::spawn(move || {
+            sniffer::start_packet_capture(hosts_cloned);
+        });
+
+        while !self.exit {
+            terminal.draw(|frame| self.render_frame(frame))?;
+            self.handle_events()?;
+
+            thread::sleep(time::Duration::from_millis(100));
+        }
+        Ok(())
+    }
+
+    fn render_frame(&self, frame: &mut Frame) {
+        frame.render_widget(self, frame.size());
+    }
+
+    fn handle_events(&mut self) -> io::Result<()> {
+        match event::read()? {
+            // it's important to check that the event is a key press event as
+            // crossterm also emits key release and repeat events on Windows.
+            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
+                self.handle_key_event(key_event)
             }
+            _ => {}
+        };
+        Ok(())
+    }
+
+    fn handle_key_event(&mut self, key_event: KeyEvent) {
+        match key_event.code {
+            KeyCode::Char('q') => self.exit(),
+            _ => {}
         }
     }
 
-    stdout().execute(LeaveAlternateScreen)?;
-    disable_raw_mode()?;
-    Ok(())
+    fn exit(&mut self) {
+        self.exit = true;
+    }
+}
+
+impl Widget for &App {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let title = Title::from(" Wirecrab ".bold());
+        let instructions = Title::from(Line::from(vec![" Quit ".into(), "<Q> ".blue().bold()]));
+        let block = Block::bordered()
+            .title(title.alignment(Alignment::Center))
+            .title(
+                instructions
+                    .alignment(Alignment::Center)
+                    .position(Position::Bottom),
+            )
+            .border_set(border::THICK);
+
+        let host_text: Text;
+        {
+            let hosts = self.hosts.lock().unwrap();
+            host_text = Text::from(
+                (*hosts)
+                    .iter()
+                    .map(|host| Line::from(vec!["host: ".into(), host.clone().into()]))
+                    .collect::<Vec<Line>>(),
+            );
+        }
+
+        Paragraph::new(host_text)
+            .centered()
+            .block(block)
+            .render(area, buf);
+    }
+}
+
+fn main() -> io::Result<()> {
+    let mut terminal = tui::init()?;
+    let app_result = App::default().run(&mut terminal);
+    tui::restore()?;
+    app_result
 }
