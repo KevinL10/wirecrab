@@ -1,14 +1,16 @@
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use crate::ethernet;
-use crate::ip;
+use crate::network::ethernet;
+use crate::network::ip;
 
 const WIFI_DEVICE: &str = "en0";
 
 // hosts is a vec of resolved source IPs that we've connected to
 // TODO: replace with tx,rx
-pub fn start_packet_capture(hosts: Arc<Mutex<Vec<String>>>) {
+pub fn start_packet_capture(tx: Sender<String>) {
     let devices = pcap::Device::list().expect("devices lookup failed");
 
     // get the wifi device
@@ -24,7 +26,7 @@ pub fn start_packet_capture(hosts: Arc<Mutex<Vec<String>>>) {
         .unwrap();
 
     cap.filter("src port 80 or src port 443", true).unwrap();
-    cap.filter("host www.testingmcafeesites.com", true).unwrap();
+    // cap.filter("host www.testingmcafeesites.com", true).unwrap();
 
     // let mut count = 0;
     cap.for_each(None, |packet| {
@@ -32,17 +34,15 @@ pub fn start_packet_capture(hosts: Arc<Mutex<Vec<String>>>) {
         let packet = ip::parse_ipv4_packet(frame.payload);
 
         // println!("{}", ip::translate_ip(packet.src));
-        println!(
-            "connection from {:?} to {:?} on protocol {:?}",
-            ip::translate_ip(packet.src),
-            ip::translate_ip(packet.dst),
-            packet.protocol
-        );
+        // println!(
+        //     "connection from {:?} to {:?} on protocol {:?}",
+        //     ip::translate_ip(packet.src),
+        //     ip::translate_ip(packet.dst),
+        //     packet.protocol
+        // );
 
-        // {
-        //     let mut data = hosts.lock().unwrap();
-        //     (*data).push(ip::translate_ip(packet.src));
-        // }
+        tx.send(ip::translate_ip(packet.src)).unwrap();
+        tx.send(ip::translate_ip(packet.dst)).unwrap();
     })
     .unwrap();
 }

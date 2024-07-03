@@ -1,4 +1,4 @@
-use crate::dns;
+use crate::network::dns;
 use std::net::Ipv4Addr;
 
 // IPv4: https://datatracker.ietf.org/doc/html/rfc791#section-3.1
