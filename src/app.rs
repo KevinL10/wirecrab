@@ -1,4 +1,5 @@
-use std::error;
+use crate::network::sniffer::SnifferPacket;
+use std::{error, net::Ipv4Addr};
 
 /// Application result type.
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
@@ -15,7 +16,7 @@ impl Default for App {
     fn default() -> Self {
         Self {
             running: true,
-            hosts: vec!["0.0.0.0".into()],
+            hosts: Vec::new(),
         }
     }
 }
@@ -34,7 +35,7 @@ impl App {
         self.running = false;
     }
 
-    pub fn update(&mut self, data: String) {
-        self.hosts.push(data);
+    pub fn update(&mut self, data: SnifferPacket) {
+        self.hosts.push(data.host);
     }
 }

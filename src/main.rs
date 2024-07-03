@@ -1,4 +1,3 @@
-use network::sniffer::start_packet_capture;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use std::sync::mpsc;
@@ -6,9 +5,8 @@ use std::{io, thread};
 use wirecrab::app::{App, AppResult};
 use wirecrab::event::{Event, EventHandler};
 use wirecrab::handler::handle_key_events;
+use wirecrab::network::sniffer::Sniffer;
 use wirecrab::tui::Tui;
-
-mod network;
 
 fn main() -> AppResult<()> {
     // Create an application.
@@ -21,10 +19,11 @@ fn main() -> AppResult<()> {
     let mut tui = Tui::new(terminal, events);
     tui.init()?;
 
+    let sniffer = Sniffer::new("en0".into());
     let (tx, rx) = mpsc::channel();
 
     thread::spawn(move || {
-        start_packet_capture(tx);
+        sniffer.start_packet_capture(tx);
     });
 
     // Start the main loop.

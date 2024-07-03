@@ -3,7 +3,7 @@ use crate::app::App;
 use ratatui::{
     buffer::Buffer,
     crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
-    layout::{Alignment, Rect},
+    layout::{self, Alignment, Constraint, Direction, Layout, Rect},
     style::Stylize,
     symbols::border,
     text::{Line, Text},
@@ -16,6 +16,16 @@ use ratatui::{
 
 /// Renders the user interface widgets.
 pub fn render(app: &mut App, frame: &mut Frame) {
+    let outer_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(vec![Constraint::Length(30)])
+        .split(frame.size());
+
+    let inner_layout = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(vec![Constraint::Length(100)])
+        .split(outer_layout[0]);
+
     let title = Title::from(" Wirecrab ".bold());
     let instructions = Title::from(Line::from(vec![" Quit ".into(), "<Q> ".black().bold()]));
     let block = Block::bordered()
@@ -34,5 +44,6 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             .collect::<Vec<Line>>(),
     );
 
-    frame.render_widget(Paragraph::new(text).block(block).centered(), frame.size())
+    let widget = Paragraph::new(text).block(block).centered();
+    frame.render_widget(widget, inner_layout[0])
 }
