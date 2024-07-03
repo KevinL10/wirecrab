@@ -4,12 +4,12 @@ use ratatui::{
     buffer::Buffer,
     crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
     layout::{self, Alignment, Constraint, Direction, Layout, Rect},
-    style::Stylize,
+    style::{Style, Stylize},
     symbols::border,
     text::{Line, Text},
     widgets::{
         block::{Position, Title},
-        Block, Paragraph, Widget,
+        Block, Paragraph, Row, Table, Widget,
     },
     Frame,
 };
@@ -37,13 +37,23 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         )
         .border_set(border::THICK);
 
-    let text = Text::from(
-        app.hosts
-            .iter()
-            .map(|host| Line::from(vec!["host: ".into(), host.clone().into()]))
-            .collect::<Vec<Line>>(),
-    );
+    let rows = app
+        .hosts
+        .iter()
+        .map(|entry| Row::new(vec![entry.ip.to_string(), entry.host.clone()]))
+        .collect::<Vec<_>>();
+    let widths = [Constraint::Percentage(30), Constraint::Percentage(50)];
+    let table = Table::new(rows, widths)
+        .column_spacing(1)
+        .header(
+            Row::new(vec!["Source", "Host"])
+                .style(Style::new().bold())
+                // To add space between the header and the rest of the rows, specify the margin
+                .bottom_margin(1),
+        )
+        .block(block)
+        .highlight_style(Style::new().green())
+        .highlight_symbol(Text::from(">"));
 
-    let widget = Paragraph::new(text).block(block).centered();
-    frame.render_widget(widget, inner_layout[0])
+    frame.render_stateful_widget(table, inner_layout[0], &mut app.state)
 }

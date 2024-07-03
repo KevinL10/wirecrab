@@ -8,6 +8,14 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
         KeyCode::Esc | KeyCode::Char('q') => {
             app.quit();
         }
+        // Previous table entry
+        KeyCode::Up | KeyCode::Char('k') => {
+            app.prev_entry();
+        }
+        // Next table entry
+        KeyCode::Down | KeyCode::Char('j') => {
+            app.next_entry();
+        }
         // Exit application on `Ctrl-C`
         KeyCode::Char('c') | KeyCode::Char('C') => {
             if key_event.modifiers == KeyModifiers::CONTROL {
