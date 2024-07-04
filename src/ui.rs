@@ -37,10 +37,15 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         )
         .border_set(border::THICK);
 
+    // iterate through app.hosts instead of app.entries.values() to maintain insert order
     let rows = app
-        .entries
-        .values()
-        .map(|entry| {
+        .hosts
+        .iter()
+        .map(|host| {
+            let entry = app
+                .entries
+                .get(host)
+                .expect("missing host from entries map");
             Row::new(vec![
                 entry.ip.to_string(),
                 entry.host.clone(),
@@ -50,8 +55,8 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .collect::<Vec<_>>();
 
     let widths = [
-        Constraint::Percentage(30),
-        Constraint::Percentage(60),
+        Constraint::Percentage(20),
+        Constraint::Percentage(70),
         Constraint::Percentage(30),
     ];
     let table = Table::new(rows, widths)

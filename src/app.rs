@@ -16,8 +16,8 @@ pub struct NetworkEntry {
 /// Application.
 #[derive(Debug)]
 pub struct App {
-    // TODO: replace String with full data structure (e.g. ip, # packets sent/received)
-    pub hosts: Vec<NetworkEntry>,
+    // Mainain map insert order with a separate hosts vector
+    pub hosts: Vec<Ipv4Addr>,
     pub state: TableState,
 
     pub entries: HashMap<Ipv4Addr, NetworkEntry>,
@@ -50,12 +50,9 @@ impl App {
     }
 
     pub fn update(&mut self, data: SnifferPacket) {
-        // TODO: check whether src/dst is the user's ip address
-        // TODO: add logic to paginate top network requests
-        // self.hosts.push(NetworkEntry {
-        //     ip: data.src,
-        //     host: data.host,
-        // });
+        if !self.entries.contains_key(&data.src) {
+            self.hosts.push(data.src);
+        }
 
         self.entries
             .entry(data.src)
