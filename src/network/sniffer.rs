@@ -36,8 +36,10 @@ impl Sniffer {
             .open()
             .unwrap();
 
-        cap.filter("src port 80 or src port 443", true).unwrap();
+        cap.filter("ip and (src port 80 or src port 443)", true)
+            .unwrap();
         // cap.filter("host www.testingmcafeesites.com", true).unwrap();
+        // cap.filter("host app.todoist.com", true).unwrap();
 
         // let mut count = 0;
         cap.for_each(None, |packet| {
@@ -48,7 +50,12 @@ impl Sniffer {
                 dst: packet.dst,
                 host: ip::translate_ip(packet.src),
             })
-            .expect("sniffer: failed to send packet")
+            .expect("sniffer: failed to send packet");
+
+            // println!("{:?} {:?}", packet.src, packet.dst);
+            // if (packet.src.octets()[0] == 0) {
+            //     println!("{:?}", packet);
+            // }
         })
         .unwrap();
     }

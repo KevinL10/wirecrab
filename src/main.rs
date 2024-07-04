@@ -16,15 +16,18 @@ fn main() -> AppResult<()> {
     let backend = CrosstermBackend::new(io::stderr());
     let terminal = Terminal::new(backend)?;
     let events = EventHandler::new(250);
-    let mut tui = Tui::new(terminal, events);
-    tui.init()?;
 
     let sniffer = Sniffer::new("en0".into());
     let (tx, rx) = mpsc::channel();
 
-    thread::spawn(move || {
+    let t = thread::spawn(move || {
         sniffer.start_packet_capture(tx);
     });
+
+    // t.join();
+
+    let mut tui = Tui::new(terminal, events);
+    tui.init()?;
 
     // Start the main loop.
     while app.running {

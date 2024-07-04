@@ -38,16 +38,27 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .border_set(border::THICK);
 
     let rows = app
-        .hosts
-        .iter()
-        .map(|entry| Row::new(vec![entry.ip.to_string(), entry.host.clone()]))
+        .entries
+        .values()
+        .map(|entry| {
+            Row::new(vec![
+                entry.ip.to_string(),
+                entry.host.clone(),
+                entry.num_packets.to_string(),
+            ])
+        })
         .collect::<Vec<_>>();
-    let widths = [Constraint::Percentage(30), Constraint::Percentage(50)];
+
+    let widths = [
+        Constraint::Percentage(30),
+        Constraint::Percentage(60),
+        Constraint::Percentage(30),
+    ];
     let table = Table::new(rows, widths)
-        .column_spacing(1)
+        .column_spacing(2)
         .header(
-            Row::new(vec!["Source", "Host"])
-                .style(Style::new().bold())
+            Row::new(vec!["Source", "Host", "Num Packets"])
+                // .style(Style::new().bold())
                 // To add space between the header and the rest of the rows, specify the margin
                 .bottom_margin(1),
         )
