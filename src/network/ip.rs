@@ -2,6 +2,7 @@ use crate::network::dns;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 // IPv6: https://datatracker.ietf.org/doc/html/rfc2460
+#[allow(dead_code)]
 pub struct Ipv6Packet<'a> {
     version: u8, // 4 bits
 
@@ -23,6 +24,7 @@ pub struct Ipv6Packet<'a> {
 }
 
 // IPv4: https://datatracker.ietf.org/doc/html/rfc791#section-3.1
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Ipv4Packet<'a> {
     /* The Version field indicates the format of the internet header */

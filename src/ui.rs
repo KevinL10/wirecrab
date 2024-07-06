@@ -1,25 +1,23 @@
 use crate::app::App;
 
 use ratatui::{
-    buffer::Buffer,
-    crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
-    layout::{self, Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint},
     style::{Style, Stylize},
     symbols::border,
-    text::{Line, Text},
+    text::Line,
     widgets::{
         block::{Position, Title},
-        Block, Paragraph, Row, Table, Widget,
+        Block, Row, Table,
     },
     Frame,
 };
 
 /// Renders the user interface widgets.
 pub fn render(app: &mut App, frame: &mut Frame) {
-    let outer_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(vec![Constraint::Length(30)])
-        .split(frame.size());
+    // let outer_layout = Layout::default()
+    //     .direction(Direction::Vertical)
+    //     .constraints(vec![Constraint::Length(30)])
+    //     .split(frame.size());
 
     // let inner_layout = Layout::default()
     //     .direction(Direction::Horizontal)
@@ -56,7 +54,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
     let widths = [
         Constraint::Percentage(50),
-        Constraint::Percentage(70),
+        Constraint::Percentage(80),
         Constraint::Percentage(30),
     ];
     let table = Table::new(rows, widths)
@@ -70,5 +68,5 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .block(block)
         .highlight_style(Style::new().green());
 
-    frame.render_stateful_widget(table, outer_layout[0], &mut app.state)
+    frame.render_stateful_widget(table, frame.size(), &mut app.state)
 }

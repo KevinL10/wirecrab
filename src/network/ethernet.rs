@@ -1,4 +1,5 @@
 // https://en.wikipedia.org/wiki/Ethernet_frame
+#[allow(dead_code)]
 pub struct EthernetFrame<'a> {
     dst: [u8; 6],
     src: [u8; 6],

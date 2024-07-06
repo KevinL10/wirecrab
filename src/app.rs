@@ -1,11 +1,7 @@
 use ratatui::widgets::TableState;
 
 use crate::network::sniffer::SnifferPacket;
-use std::{
-    collections::HashMap,
-    error,
-    net::{IpAddr, Ipv4Addr},
-};
+use std::{collections::HashMap, error, net::IpAddr};
 
 /// Application result type.
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;

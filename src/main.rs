@@ -20,7 +20,7 @@ fn main() -> AppResult<()> {
     let sniffer = Sniffer::new("en0".into());
     let (tx, rx) = mpsc::channel();
 
-    let t = thread::spawn(move || {
+    let _t = thread::spawn(move || {
         sniffer.start_packet_capture(tx);
     });
 
