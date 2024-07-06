@@ -20,7 +20,7 @@ pub struct Ipv6Packet<'a> {
 
     pub dst: Ipv6Addr, // 128 bits
 
-    payload: &'a [u8],
+    pub payload: &'a [u8],
 }
 
 // IPv4: https://datatracker.ietf.org/doc/html/rfc791#section-3.1
@@ -86,7 +86,7 @@ pub struct Ipv4Packet<'a> {
 
     options: Option<&'a [u8]>, // variable bits, given by IHL
 
-    payload: &'a [u8],
+    pub payload: &'a [u8],
 }
 
 // TODO: properly handle next_header

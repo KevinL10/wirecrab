@@ -1,4 +1,4 @@
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 use std::vec;
 
 use std::net::UdpSocket;
@@ -7,6 +7,11 @@ use std::net::UdpSocket;
 // TODO: replace with local DNS server
 const DNS_SERVER: &str = "8.8.8.8:53";
 // const DNS_SERVER: &str = "192.168.2.1:53";
+
+pub struct DnsARecord {
+    pub domain: String,
+    pub a_records: Vec<IpAddr>,
+}
 
 // https://www.ietf.org/rfc/rfc1035.txt - section 4.1
 fn build_reverse_packet(addr: IpAddr) -> Vec<u8> {
@@ -93,6 +98,50 @@ fn build_reverse_packet(addr: IpAddr) -> Vec<u8> {
     packet
 }
 
+// TODO: handle cnames
+pub fn parse_dns_a_response(packet: &[u8]) -> Option<DnsARecord> {
+    if packet.len() < 12 {
+        return None;
+    }
+
+    let qdcount = u16::from_be_bytes([packet[4], packet[5]]);
+    let ancount = u16::from_be_bytes([packet[6], packet[7]]);
+    let mut index = 12;
+
+    let domain = parse_name(packet, &mut index)?;
+
+    // Skip the query section
+    index += 4; // 2 bytes for type and 2 bytes for class
+
+    let mut a_records = Vec::new();
+    for _ in 0..ancount {
+        let name = parse_name(packet, &mut index)?;
+        let rtype = u16::from_be_bytes([packet[index], packet[index + 1]]);
+        index += 2; // Type
+        index += 2; // Class
+        index += 4; // TTL
+        let rdlength = u16::from_be_bytes([packet[index], packet[index + 1]]) as usize;
+        index += 2;
+
+        if rtype == 1 && rdlength == 4 {
+            a_records.push(IpAddr::V4(Ipv4Addr::new(
+                packet[index],
+                packet[index + 1],
+                packet[index + 2],
+                packet[index + 3],
+            )));
+        }
+        index += rdlength;
+    }
+
+    if a_records.len() == 0 {
+        return None;
+    }
+
+    // strip outer quotes
+    Some(DnsARecord { domain, a_records })
+}
+
 fn parse_dns_response(response: &[u8]) -> Option<String> {
     if response.len() < 12 {
         return None;
@@ -137,23 +186,60 @@ fn parse_dns_response(response: &[u8]) -> Option<String> {
         let rdlength = ((response[pos - 2] as u16) << 8) | response[pos - 1] as u16;
         let end = pos + rdlength as usize;
 
-        let mut ptr_name = String::new();
-        while pos < end {
-            let len = response[pos] as usize;
-            if len == 0 {
-                break;
-            }
-            if !ptr_name.is_empty() {
-                ptr_name.push('.');
-            }
-            ptr_name.push_str(&String::from_utf8_lossy(&response[pos + 1..pos + 1 + len]));
-            pos += len + 1;
-        }
-
-        return Some(ptr_name);
+        return parse_name(response, &mut pos);
     }
 
     None
+}
+
+fn parse_name(packet: &[u8], index: &mut usize) -> Option<String> {
+    let mut name = String::new();
+    while packet[*index] != 0 {
+        if packet[*index] & 0xC0 == 0xC0 {
+            // Name compression
+            let offset = ((packet[*index] as usize & 0x3F) << 8) | packet[*index + 1] as usize;
+            *index += 2;
+            if let Some(compressed_name) = parse_compressed_name(packet, offset) {
+                name.push_str(&compressed_name);
+            }
+            return Some(name);
+        } else {
+            let length = packet[*index] as usize;
+            *index += 1;
+            if *index + length > packet.len() {
+                return None;
+            }
+            if !name.is_empty() {
+                name.push('.');
+            }
+            name.push_str(&String::from_utf8_lossy(&packet[*index..*index + length]));
+            *index += length;
+        }
+    }
+    *index += 1;
+    Some(name)
+}
+
+fn parse_compressed_name(packet: &[u8], mut index: usize) -> Option<String> {
+    let mut name = String::new();
+    while packet[index] != 0 {
+        if packet[index] & 0xC0 == 0xC0 {
+            let offset = ((packet[index] as usize & 0x3F) << 8) | packet[index + 1] as usize;
+            index = offset;
+        } else {
+            let length = packet[index] as usize;
+            index += 1;
+            if index + length > packet.len() {
+                return None;
+            }
+            if !name.is_empty() {
+                name.push('.');
+            }
+            name.push_str(&String::from_utf8_lossy(&packet[index..index + length]));
+            index += length;
+        }
+    }
+    Some(name)
 }
 
 /* Returns the domain name pointed to by addr in the PTR record */

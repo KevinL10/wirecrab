@@ -21,5 +21,6 @@ Wirecrab uses `libpcap` as the packet capture interface. MacOS comes with `libpc
 
 ### Roadmap
 - [ ] Listen on all network interfaces
-- [ ] Resolve IP reverse lookups with the DNS traffic capture
+- [x] Resolve IP reverse lookups with the DNS traffic capture
 - [ ] Clean up terminal UI
+- [ ] Add option to flush system and browser DNS

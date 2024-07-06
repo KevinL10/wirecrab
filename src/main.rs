@@ -1,11 +1,13 @@
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use std::net::{IpAddr, Ipv4Addr};
 use std::sync::mpsc;
 use std::{io, thread};
 use wirecrab::app::{App, AppResult};
 use wirecrab::event::{Event, EventHandler};
 use wirecrab::handler::handle_key_events;
-use wirecrab::network::sniffer::Sniffer;
+use wirecrab::network::dns::DnsARecord;
+use wirecrab::network::sniffer::{Sniffer, SnifferPacket};
 use wirecrab::tui::Tui;
 
 fn main() -> AppResult<()> {
@@ -17,11 +19,18 @@ fn main() -> AppResult<()> {
     let terminal = Terminal::new(backend)?;
     let events = EventHandler::new(250);
 
+    // TODO: move into a single Sniffer instance
+    let dns = Sniffer::new("en0".into());
     let sniffer = Sniffer::new("en0".into());
     let (tx, rx) = mpsc::channel();
+    let (tx_dns, rx_dns) = mpsc::channel();
 
     let _t = thread::spawn(move || {
         sniffer.start_packet_capture(tx);
+    });
+
+    let _t = thread::spawn(move || {
+        dns.start_dns_capture(tx_dns);
     });
 
     // t.join();
@@ -33,6 +42,10 @@ fn main() -> AppResult<()> {
     while app.running {
         while let Ok(data) = rx.try_recv() {
             app.update(data);
+        }
+
+        while let Ok(data) = rx_dns.try_recv() {
+            app.update_dns_cache(data);
         }
 
         // Render the user interface.

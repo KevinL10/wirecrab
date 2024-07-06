@@ -1,7 +1,7 @@
 use ratatui::widgets::TableState;
 
-use crate::network::sniffer::SnifferPacket;
-use std::{collections::HashMap, error, net::IpAddr};
+use crate::network::{dns::DnsARecord, sniffer::SnifferPacket};
+use std::{collections::HashMap, error, fs::File, io::Write, net::IpAddr};
 
 /// Application result type.
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
@@ -22,6 +22,9 @@ pub struct App {
 
     pub entries: HashMap<IpAddr, NetworkEntry>,
     pub running: bool,
+
+    // Mapping between ip address and hostname from live DNS traffic
+    pub dns_cache: HashMap<IpAddr, String>,
 }
 
 impl Default for App {
@@ -31,6 +34,7 @@ impl Default for App {
             state: TableState::new(),
             hosts: Vec::new(),
             entries: HashMap::new(),
+            dns_cache: HashMap::new(),
         }
     }
 }
@@ -49,6 +53,12 @@ impl App {
         self.running = false;
     }
 
+    pub fn update_dns_cache(&mut self, data: DnsARecord) {
+        for ip in data.a_records {
+            self.dns_cache.insert(ip, data.domain.clone());
+        }
+    }
+
     pub fn update(&mut self, data: SnifferPacket) {
         if !self.entries.contains_key(&data.src) {
             self.hosts.push(data.src);
@@ -59,7 +69,12 @@ impl App {
             .and_modify(|e| (*e).num_packets += 1)
             .or_insert(NetworkEntry {
                 ip: data.src,
-                host: data.host,
+                // the dns cache takes priority for resolving hostname
+                host: if self.dns_cache.contains_key(&data.src) {
+                    self.dns_cache[&data.src].clone()
+                } else {
+                    data.host
+                },
                 num_packets: 1,
             });
     }
