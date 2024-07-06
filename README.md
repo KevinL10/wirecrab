@@ -1,3 +1,5 @@
 # Wirecrab
 
-Monitor outgoing HTTP requests in your terminal.
+Monitor outgoing TCP/IP requests in your terminal.
+
+![example](/static/ex1.png)

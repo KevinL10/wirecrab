@@ -181,7 +181,6 @@ pub fn parse_ipv4_packet(data: &[u8]) -> Ipv4Packet {
     }
 }
 
-// Returns the domain name for the IP if one exists; otherwise return the ip back as a String
 pub fn translate_ip(ip: IpAddr) -> String {
-    dns::reverse_lookup(ip).unwrap_or(ip.to_string())
+    dns::reverse_lookup(ip).unwrap_or(String::from("-"))
 }
