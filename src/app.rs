@@ -1,14 +1,18 @@
 use ratatui::widgets::TableState;
 
 use crate::network::sniffer::SnifferPacket;
-use std::{collections::HashMap, error, net::Ipv4Addr};
+use std::{
+    collections::HashMap,
+    error,
+    net::{IpAddr, Ipv4Addr},
+};
 
 /// Application result type.
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
 
 #[derive(Debug)]
 pub struct NetworkEntry {
-    pub ip: Ipv4Addr,
+    pub ip: IpAddr,
     pub host: String,
     pub num_packets: u32,
 }
@@ -17,10 +21,10 @@ pub struct NetworkEntry {
 #[derive(Debug)]
 pub struct App {
     // Mainain map insert order with a separate hosts vector
-    pub hosts: Vec<Ipv4Addr>,
+    pub hosts: Vec<IpAddr>,
     pub state: TableState,
 
-    pub entries: HashMap<Ipv4Addr, NetworkEntry>,
+    pub entries: HashMap<IpAddr, NetworkEntry>,
     pub running: bool,
 }
 

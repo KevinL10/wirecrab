@@ -16,7 +16,6 @@ pub fn parse_ethernet_frame(data: &[u8]) -> EthernetFrame {
     // Check if the ethernet frame has the optional 802.1Q tag
     // https://en.wikipedia.org/wiki/Ethernet_frame#Header
     let payload_start_idx: usize = if ethertype[0] == 0x81 && ethertype[1] == 0x00 {
-        // 802.1 Q
         18
     } else if ethertype[0] == 0x88 && ethertype[1] == 0xa8 {
         18

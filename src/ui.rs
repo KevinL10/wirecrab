@@ -21,10 +21,10 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .constraints(vec![Constraint::Length(30)])
         .split(frame.size());
 
-    let inner_layout = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints(vec![Constraint::Length(100)])
-        .split(outer_layout[0]);
+    // let inner_layout = Layout::default()
+    //     .direction(Direction::Horizontal)
+    //     .constraints(vec![Constraint::Length(100)])
+    //     .split(outer_layout[0]);
 
     let title = Title::from(" Wirecrab ".bold());
     let instructions = Title::from(Line::from(vec![" Quit ".into(), "<Q> ".black().bold()]));
@@ -55,7 +55,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .collect::<Vec<_>>();
 
     let widths = [
-        Constraint::Percentage(20),
+        Constraint::Percentage(50),
         Constraint::Percentage(70),
         Constraint::Percentage(30),
     ];
@@ -68,8 +68,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                 .bottom_margin(1),
         )
         .block(block)
-        .highlight_style(Style::new().green())
-        .highlight_symbol(Text::from(">"));
+        .highlight_style(Style::new().green());
 
-    frame.render_stateful_widget(table, inner_layout[0], &mut app.state)
+    frame.render_stateful_widget(table, outer_layout[0], &mut app.state)
 }

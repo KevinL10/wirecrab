@@ -1,3 +1,4 @@
+use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::sync::mpsc::Sender;
 
@@ -7,8 +8,8 @@ use crate::network::ethernet;
 use crate::network::ip;
 
 pub struct SnifferPacket {
-    pub src: Ipv4Addr,
-    pub dst: Ipv4Addr,
+    pub src: IpAddr,
+    pub dst: IpAddr,
     pub host: String,
 }
 
@@ -36,26 +37,33 @@ impl Sniffer {
             .open()
             .unwrap();
 
-        cap.filter("ip and (src port 80 or src port 443)", true)
-            .unwrap();
+        cap.filter("src port 80 or src port 443", true).unwrap();
         // cap.filter("host www.testingmcafeesites.com", true).unwrap();
         // cap.filter("host app.todoist.com", true).unwrap();
 
         // let mut count = 0;
         cap.for_each(None, |packet| {
             let frame = ethernet::parse_ethernet_frame(packet.data);
-            let packet = ip::parse_ipv4_packet(frame.payload);
-            tx.send(SnifferPacket {
-                src: packet.src,
-                dst: packet.dst,
-                host: ip::translate_ip(packet.src),
-            })
-            .expect("sniffer: failed to send packet");
 
-            // println!("{:?} {:?}", packet.src, packet.dst);
-            // if (packet.src.octets()[0] == 0) {
-            //     println!("{:?}", packet);
-            // }
+            if frame.ethertype[0] == 0x08 && frame.ethertype[1] == 0x00 {
+                let packet = ip::parse_ipv4_packet(frame.payload);
+                tx.send(SnifferPacket {
+                    src: IpAddr::V4(packet.src),
+                    dst: IpAddr::V4(packet.dst),
+                    host: ip::translate_ip(IpAddr::V4(packet.src)),
+                })
+                .expect("sniffer: failed to send ipv4 packet");
+            } else if frame.ethertype[0] == 0x86 && frame.ethertype[1] == 0xdd {
+                let packet = ip::parse_ipv6_packet(frame.payload);
+                tx.send(SnifferPacket {
+                    src: IpAddr::V6(packet.src),
+                    dst: IpAddr::V6(packet.dst),
+                    host: ip::translate_ip(IpAddr::V6(packet.src)),
+                })
+                .expect("sniffer: failed to send ipv6 packet");
+            } else {
+                panic!("unsupported ethertype {:?}", frame.ethertype);
+            }
         })
         .unwrap();
     }

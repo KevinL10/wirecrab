@@ -1,4 +1,4 @@
-use std::net::Ipv4Addr;
+use std::net::{IpAddr, Ipv4Addr};
 use std::vec;
 
 use std::net::UdpSocket;
@@ -9,7 +9,7 @@ const DNS_SERVER: &str = "8.8.8.8:53";
 // const DNS_SERVER: &str = "192.168.2.1:53";
 
 // https://www.ietf.org/rfc/rfc1035.txt - section 4.1
-fn build_reverse_packet(addr: Ipv4Addr) -> Vec<u8> {
+fn build_reverse_packet(addr: IpAddr) -> Vec<u8> {
     /*
                                     1  1  1  1  1  1
       0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
@@ -52,16 +52,39 @@ fn build_reverse_packet(addr: Ipv4Addr) -> Vec<u8> {
     +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
      */
 
-    for octet in addr.octets().iter().rev() {
-        let part = octet.to_string();
+    let mut parts = Vec::new();
+    if let IpAddr::V4(addr) = addr {
+        for octet in addr.octets().iter().rev() {
+            parts.push(octet.to_string());
+        }
+    } else if let IpAddr::V6(addr) = addr {
+        for segment in addr.segments().iter().rev() {
+            parts.push(format!("{:x}", segment & 0x000F));
+            parts.push(format!("{:x}", (segment & 0x00F0) >> 4));
+            parts.push(format!("{:x}", (segment & 0x0F00) >> 8));
+            parts.push(format!("{:x}", (segment & 0xF000) >> 12));
+        }
+    }
+
+    for part in parts {
         packet.push(part.len() as u8);
         packet.extend(part.as_bytes());
     }
 
+    // ipv4 should query `in-addr.arpa`
+    if addr.is_ipv4() {
+        packet.extend(vec![
+            0x07, b'i', b'n', b'-', b'a', b'd', b'd', b'r', 0x04, b'a', b'r', b'p', b'a',
+        ]);
+    }
+
+    // ipv6 should query `ip6.arpa`
+    if addr.is_ipv6() {
+        packet.extend(vec![0x03, b'i', b'p', b'6', 0x04, b'a', b'r', b'p', b'a']);
+    }
+
     #[rustfmt::skip]
     packet.extend(vec![
-        0x07, b'i', b'n', b'-', b'a', b'd', b'd', b'r', 
-        0x04, b'a', b'r', b'p', b'a',
         0x00, // null terminator for QNAME
         0x00, 0x0C, // QTYPE: PTR
         0x00, 0x01, // QCLASS: IN
@@ -134,7 +157,7 @@ fn parse_dns_response(response: &[u8]) -> Option<String> {
 }
 
 /* Returns the domain name pointed to by addr in the PTR record */
-pub fn reverse_lookup(addr: Ipv4Addr) -> Option<String> {
+pub fn reverse_lookup(addr: IpAddr) -> Option<String> {
     let query_packet = build_reverse_packet(addr);
 
     let socket = UdpSocket::bind("0.0.0.0:0").expect("Unable to bind to local socket");

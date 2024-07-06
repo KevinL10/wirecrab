@@ -1,11 +1,30 @@
 use crate::network::dns;
-use std::net::Ipv4Addr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+
+// IPv6: https://datatracker.ietf.org/doc/html/rfc2460
+pub struct Ipv6Packet<'a> {
+    version: u8, // 4 bits
+
+    traffic_class: u8, // 8 bits
+
+    flow_label: u32, // 20 bits
+
+    payload_length: u16, // 16 bits
+
+    next_header: u8, // 8 bits
+
+    hop_limit: u8, // 8 bits
+
+    pub src: Ipv6Addr, // 128 bits
+
+    pub dst: Ipv6Addr, // 128 bits
+
+    payload: &'a [u8],
+}
 
 // IPv4: https://datatracker.ietf.org/doc/html/rfc791#section-3.1
-// IPv6: https://datatracker.ietf.org/doc/html/rfc2460
-// TODO: add support for IPv6 headers
 #[derive(Debug)]
-pub struct IPv4Packet<'a> {
+pub struct Ipv4Packet<'a> {
     /* The Version field indicates the format of the internet header */
     version: u8, // 4 bits
 
@@ -68,7 +87,53 @@ pub struct IPv4Packet<'a> {
     payload: &'a [u8],
 }
 
-pub fn parse_ipv4_packet(data: &[u8]) -> IPv4Packet {
+// TODO: properly handle next_header
+pub fn parse_ipv6_packet(data: &[u8]) -> Ipv6Packet {
+    let version = (data[0] >> 4) & 0x0F;
+    let traffic_class = ((data[0] & 0x0F) << 4) | (data[1] >> 4);
+    let flow_label = ((data[1] as u32 & 0x0F) << 16) | (data[2] as u32) << 8 | (data[3] as u32);
+    let payload_length = u16::from_be_bytes([data[4], data[5]]);
+    let next_header = data[6];
+    let hop_limit = data[7];
+
+    let src = Ipv6Addr::new(
+        u16::from_be_bytes([data[8], data[9]]),
+        u16::from_be_bytes([data[10], data[11]]),
+        u16::from_be_bytes([data[12], data[13]]),
+        u16::from_be_bytes([data[14], data[15]]),
+        u16::from_be_bytes([data[16], data[17]]),
+        u16::from_be_bytes([data[18], data[19]]),
+        u16::from_be_bytes([data[20], data[21]]),
+        u16::from_be_bytes([data[22], data[23]]),
+    );
+
+    let dst = Ipv6Addr::new(
+        u16::from_be_bytes([data[24], data[25]]),
+        u16::from_be_bytes([data[26], data[27]]),
+        u16::from_be_bytes([data[28], data[29]]),
+        u16::from_be_bytes([data[30], data[31]]),
+        u16::from_be_bytes([data[32], data[33]]),
+        u16::from_be_bytes([data[34], data[35]]),
+        u16::from_be_bytes([data[36], data[37]]),
+        u16::from_be_bytes([data[38], data[39]]),
+    );
+
+    let payload = &data[40..];
+
+    Ipv6Packet {
+        version,
+        traffic_class,
+        flow_label,
+        payload_length,
+        next_header,
+        hop_limit,
+        src,
+        dst,
+        payload,
+    }
+}
+
+pub fn parse_ipv4_packet(data: &[u8]) -> Ipv4Packet {
     let version = data[0] >> 0x4;
     let ihl = data[0] & 0x0F;
     let ihl_in_bytes = (ihl * 4) as usize;
@@ -96,7 +161,7 @@ pub fn parse_ipv4_packet(data: &[u8]) -> IPv4Packet {
 
     let payload = &data[ihl_in_bytes..];
 
-    IPv4Packet {
+    Ipv4Packet {
         version,
         ihl,
         service_type,
@@ -115,6 +180,6 @@ pub fn parse_ipv4_packet(data: &[u8]) -> IPv4Packet {
 }
 
 // Returns the domain name for the IP if one exists; otherwise return the ip back as a String
-pub fn translate_ip(ip: Ipv4Addr) -> String {
+pub fn translate_ip(ip: IpAddr) -> String {
     dns::reverse_lookup(ip).unwrap_or(ip.to_string())
 }
