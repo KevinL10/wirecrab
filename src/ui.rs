@@ -91,9 +91,14 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
 #[allow(unused)]
 pub fn render_bottom_bar(app: &mut App, area: Rect, frame: &mut Frame) {
-    let instructions = Line::from(vec![
-        Span::from("Esc/Q "),
-        Span::from("Quit").bg(Color::LightCyan).fg(Color::Black),
-    ]);
-    frame.render_widget(instructions, area);
+    let areas = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(vec![Constraint::Length(6), Constraint::Min(0)])
+        .split(area);
+
+    frame.render_widget(Span::from("Esc/Q"), areas[0]);
+    frame.render_widget(
+        Line::from("Quit").bg(Color::LightCyan).fg(Color::Black),
+        areas[1],
+    );
 }
