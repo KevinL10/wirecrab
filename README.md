@@ -2,7 +2,7 @@
 
 Monitor outgoing network requests in your terminal.
 
-![example](/static/ex1.png)
+![example](/static/ex2.png)
 
 Wirecrab currently supports IPv4 and IPv6 over Ethernet frames.
 
@@ -22,5 +22,6 @@ Wirecrab uses `libpcap` as the packet capture interface. MacOS comes with `libpc
 ### Roadmap
 - [ ] Listen on all network interfaces
 - [x] Resolve IP reverse lookups with the DNS traffic capture
+- [ ] Resolve CNAME results
 - [ ] Clean up terminal UI
 - [ ] Add option to flush system and browser DNS

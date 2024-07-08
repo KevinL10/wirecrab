@@ -44,37 +44,56 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                 .entries
                 .get(host)
                 .expect("missing host from entries map");
+
+            // if we could not resolve the entry host
+            let should_ignore = entry.host.len() < 2;
+
             Row::new(vec![
-                entry.ip.to_string(),
-                entry.host.clone(),
-                entry.num_packets.to_string(),
+                Line::from(entry.ip.to_string()).style(Style::new().fg(if should_ignore {
+                    Color::DarkGray
+                } else {
+                    Color::White
+                })),
+                Line::from(entry.num_packets.to_string())
+                    .alignment(Alignment::Right)
+                    .style(Style::new().fg(if should_ignore {
+                        Color::DarkGray
+                    } else {
+                        Color::Green
+                    })),
+                Line::from(entry.host.clone()).style(Style::new().fg(if should_ignore {
+                    Color::DarkGray
+                } else {
+                    Color::White
+                })),
             ])
+            .style(Style::new().fg(Color::Gray))
         })
         .collect::<Vec<_>>();
 
     let widths = [
-        Constraint::Percentage(50),
-        Constraint::Percentage(80),
-        Constraint::Percentage(20),
+        Constraint::Length(40),
+        Constraint::Length(10),
+        Constraint::Min(20),
     ];
     let table = Table::new(rows, widths)
         .column_spacing(2)
         .header(
-            Row::new(vec!["SOURCE", "HOST", "NUM PACKETS"])
-                // .style(Style::new().bold())
-                .style(Style::new().bg(Color::Green))
-                // To add space between the header and the rest of the rows, specify the margin
+            Row::new(vec![" IP", "NUM PACKETS", "HOST"])
+                .style(Style::new().bg(Color::Green).fg(Color::Black))
                 .bottom_margin(1),
         )
-        // .block(block)
-        .highlight_style(Style::new().green());
+        .highlight_style(Style::new().bg(Color::LightCyan).fg(Color::Black));
 
     frame.render_stateful_widget(table, areas[0], &mut app.state);
-    // render_bottom_bar(app, areas[1], frame);
+    render_bottom_bar(app, areas[1], frame);
 }
 
 #[allow(unused)]
 pub fn render_bottom_bar(app: &mut App, area: Rect, frame: &mut Frame) {
-    let instructions = Line::from(vec![" Quit ".into(), "<Q> ".black().bold()]);
+    let instructions = Line::from(vec![
+        Span::from("Esc/Q "),
+        Span::from("Quit").bg(Color::LightCyan).fg(Color::Black),
+    ]);
     frame.render_widget(instructions, area);
 }
