@@ -8,12 +8,12 @@ use crate::network::ethernet;
 use crate::network::ip;
 use crate::network::udp;
 
-use super::dns::DnsARecord;
+use super::dns::DnsDirectRecord;
 
 pub struct SnifferPacket {
     pub src: IpAddr,
     pub dst: IpAddr,
-    pub host: String,
+    // pub host: String,
 }
 
 pub struct Sniffer {
@@ -33,7 +33,9 @@ impl Sniffer {
         Self { device }
     }
 
-    pub fn start_dns_capture(&self, tx: Sender<DnsARecord>) {
+    // Listens for A and AAAA records and sends them back to the main thread
+    // TODO: listen to CNAME
+    pub fn start_dns_capture(&self, tx: Sender<DnsDirectRecord>) {
         let mut cap = pcap::Capture::from_device(self.device.clone())
             .expect("failed to get capture")
             .immediate_mode(true)
@@ -46,24 +48,19 @@ impl Sniffer {
         cap.for_each(None, |packet| {
             let frame = ethernet::parse_ethernet_frame(packet.data);
 
-            if frame.ethertype[0] == 0x08 && frame.ethertype[1] == 0x00 {
-                let packet = ip::parse_ipv4_packet(frame.payload);
-                let datagram = udp::parse_udp_packet(packet.payload);
-                let record = dns::parse_dns_a_response(datagram.data);
-
-                if let Some(record) = record {
-                    tx.send(record).unwrap();
-                }
+            let ip_payload = if frame.ethertype[0] == 0x08 && frame.ethertype[1] == 0x00 {
+                ip::parse_ipv4_packet(frame.payload).payload
             } else if frame.ethertype[0] == 0x86 && frame.ethertype[1] == 0xdd {
-                let packet = ip::parse_ipv6_packet(frame.payload);
-                // tx.send(SnifferPacket {
-                //     src: IpAddr::V6(packet.src),
-                //     dst: IpAddr::V6(packet.dst),
-                //     host: ip::translate_ip(IpAddr::V6(packet.src)),
-                // })
-                // .expect("sniffer: failed to send ipv6 packet");
+                ip::parse_ipv6_packet(frame.payload).payload
             } else {
                 panic!("unsupported ethertype {:?}", frame.ethertype);
+            };
+
+            let datagram = udp::parse_udp_packet(ip_payload);
+            let record = dns::DnsResourceRecord::parse_direct_record(datagram.data);
+
+            if let Some(record) = record {
+                tx.send(record).unwrap();
             }
         })
         .unwrap();
@@ -86,7 +83,6 @@ impl Sniffer {
                 tx.send(SnifferPacket {
                     src: IpAddr::V4(packet.src),
                     dst: IpAddr::V4(packet.dst),
-                    host: ip::translate_ip(IpAddr::V4(packet.src)),
                 })
                 .expect("sniffer: failed to send ipv4 packet");
             } else if frame.ethertype[0] == 0x86 && frame.ethertype[1] == 0xdd {
@@ -94,7 +90,6 @@ impl Sniffer {
                 tx.send(SnifferPacket {
                     src: IpAddr::V6(packet.src),
                     dst: IpAddr::V6(packet.dst),
-                    host: ip::translate_ip(IpAddr::V6(packet.src)),
                 })
                 .expect("sniffer: failed to send ipv6 packet");
             } else {

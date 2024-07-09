@@ -1,6 +1,6 @@
 use ratatui::widgets::TableState;
 
-use crate::network::{dns::DnsARecord, sniffer::SnifferPacket};
+use crate::network::{dns::DnsDirectRecord, ip, sniffer::SnifferPacket};
 use std::{collections::HashMap, error, fs::File, io::Write, net::IpAddr};
 
 /// Application result type.
@@ -53,8 +53,8 @@ impl App {
         self.running = false;
     }
 
-    pub fn update_dns_cache(&mut self, data: DnsARecord) {
-        for ip in data.a_records {
+    pub fn update_dns_cache(&mut self, data: DnsDirectRecord) {
+        for ip in data.records {
             self.dns_cache.insert(ip, data.domain.clone());
         }
     }
@@ -73,7 +73,9 @@ impl App {
                 host: if self.dns_cache.contains_key(&data.src) {
                     self.dns_cache[&data.src].clone()
                 } else {
-                    data.host
+                    let host = ip::translate_ip(data.src);
+                    self.dns_cache.insert(data.src, host.clone());
+                    host
                 },
                 num_packets: 1,
             });

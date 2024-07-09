@@ -1,4 +1,5 @@
-use std::net::{IpAddr, Ipv4Addr};
+use std::io::Read;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::vec;
 
 use std::net::UdpSocket;
@@ -8,12 +9,235 @@ use std::net::UdpSocket;
 const DNS_SERVER: &str = "8.8.8.8:53";
 // const DNS_SERVER: &str = "192.168.2.1:53";
 
-pub struct DnsARecord {
+#[derive(Debug)]
+pub struct DnsDirectRecord {
     pub domain: String,
-    pub a_records: Vec<IpAddr>,
+    pub records: Vec<IpAddr>,
+}
+#[derive(Debug)]
+pub struct DnsHeader {
+    id: u16,           // 16 bits
+    flags: u16,        // 16 bits
+    pub qd_count: u16, // 16 bits
+    pub an_count: u16, // 16 bits
+    pub ns_count: u16, // 16 bits
+    pub ar_count: u16, // 16 bits
+}
+
+#[derive(Debug)]
+pub struct DnsQuestion {
+    pub qname: String, // variable length
+    qtype: u16,        // 16 bits
+    qclass: u16,       // 16 bits
 }
 
 // https://www.ietf.org/rfc/rfc1035.txt - section 4.1
+#[derive(Debug)]
+pub struct DnsMessage {
+    questions: Vec<DnsQuestion>,
+    answers: Vec<DnsResourceRecord>,
+    authorities: Vec<DnsResourceRecord>,
+    additional: Vec<DnsResourceRecord>,
+}
+
+#[derive(Debug)]
+pub struct DnsResourceRecord {
+    name: String,  // variable length
+    rtype: u16,    // 16 bits
+    rclass: u16,   // 16 bits
+    ttl: u32,      // 32 bits
+    rdlength: u16, // 16 bits
+    rdata: Vec<u8>,
+}
+
+impl DnsResourceRecord {
+    fn parse(message: &[u8], index: &mut usize) -> DnsResourceRecord {
+        let name = parse_name(message, index);
+
+        let rtype = ((message[*index] as u16) << 8) | (message[*index + 1] as u16);
+        let rclass = ((message[*index + 2] as u16) << 8) | (message[*index + 3] as u16);
+        let ttl = ((message[*index + 4] as u32) << 24)
+            | ((message[*index + 5] as u32) << 16)
+            | ((message[*index + 6] as u32) << 8)
+            | (message[*index + 7] as u32);
+        let rdlength = ((message[*index + 8] as u16) << 8) | (message[*index + 9] as u16);
+
+        let rdata_start = *index + 10;
+        let rdata_end = rdata_start + rdlength as usize;
+        let rdata = message[rdata_start..rdata_end].to_vec();
+
+        *index = rdata_end;
+
+        DnsResourceRecord {
+            name,
+            rtype,
+            rclass,
+            ttl,
+            rdlength,
+            rdata,
+        }
+    }
+
+    pub fn parse_direct_record(message: &[u8]) -> Option<DnsDirectRecord> {
+        let message = DnsMessage::parse(message);
+        let domain = message.questions[0].qname.clone();
+        let mut records = Vec::new();
+
+        for answer in message.answers {
+            if answer.rtype == 1 {
+                // A Record
+                records.push(IpAddr::V4(Ipv4Addr::new(
+                    answer.rdata[0],
+                    answer.rdata[1],
+                    answer.rdata[2],
+                    answer.rdata[3],
+                )));
+            } else if answer.rtype == 28 {
+                // AAAA Record
+                records.push(IpAddr::V6(Ipv6Addr::new(
+                    u16::from_be_bytes([answer.rdata[0], answer.rdata[1]]),
+                    u16::from_be_bytes([answer.rdata[2], answer.rdata[3]]),
+                    u16::from_be_bytes([answer.rdata[4], answer.rdata[5]]),
+                    u16::from_be_bytes([answer.rdata[6], answer.rdata[7]]),
+                    u16::from_be_bytes([answer.rdata[8], answer.rdata[9]]),
+                    u16::from_be_bytes([answer.rdata[10], answer.rdata[11]]),
+                    u16::from_be_bytes([answer.rdata[12], answer.rdata[13]]),
+                    u16::from_be_bytes([answer.rdata[14], answer.rdata[15]]),
+                )));
+            }
+        }
+
+        if records.len() == 0 {
+            return None;
+        }
+
+        Some(DnsDirectRecord { domain, records })
+    }
+}
+
+impl DnsMessage {
+    pub fn parse(message: &[u8]) -> DnsMessage {
+        let mut index = 0;
+        let header = DnsHeader::parse(message, &mut index);
+
+        let questions: Vec<DnsQuestion> = (0..header.qd_count)
+            .map(|_| DnsQuestion::parse(message, &mut index))
+            .collect();
+        let answers: Vec<DnsResourceRecord> = (0..header.an_count)
+            .map(|_| DnsResourceRecord::parse(message, &mut index))
+            .collect();
+        let authorities: Vec<DnsResourceRecord> = (0..header.ns_count)
+            .map(|_| DnsResourceRecord::parse(message, &mut index))
+            .collect();
+        let additional: Vec<DnsResourceRecord> = (0..header.ar_count)
+            .map(|_| DnsResourceRecord::parse(message, &mut index))
+            .collect();
+
+        DnsMessage {
+            questions,
+            answers,
+            authorities,
+            additional,
+        }
+    }
+}
+
+impl DnsHeader {
+    fn parse(message: &[u8], index: &mut usize) -> DnsHeader {
+        let id = ((message[0] as u16) << 8) | (message[1] as u16);
+        let flags = ((message[2] as u16) << 8) | (message[3] as u16);
+        let qd_count = ((message[4] as u16) << 8) | (message[5] as u16);
+        let an_count = ((message[6] as u16) << 8) | (message[7] as u16);
+        let ns_count = ((message[8] as u16) << 8) | (message[9] as u16);
+        let ar_count = ((message[10] as u16) << 8) | (message[11] as u16);
+
+        *index = 12;
+
+        DnsHeader {
+            id,
+            flags,
+            qd_count,
+            an_count,
+            ns_count,
+            ar_count,
+        }
+    }
+}
+
+impl DnsQuestion {
+    pub fn parse(message: &[u8], index: &mut usize) -> DnsQuestion {
+        let qname = parse_name(message, index);
+        let qtype = ((message[*index] as u16) << 8) | (message[*index + 1] as u16);
+        let qclass = ((message[*index + 2] as u16) << 8) | (message[*index + 3] as u16);
+        *index += 4;
+
+        DnsQuestion {
+            qname,
+            qtype,
+            qclass,
+        }
+    }
+}
+
+fn parse_dns_response(response: &[u8]) -> Option<String> {
+    let message = DnsMessage::parse(response);
+    let mut index = 0;
+    if message.answers.len() == 0 {
+        return None;
+    }
+    Some(parse_name(&message.answers[0].rdata, &mut index))
+}
+
+fn parse_name(packet: &[u8], index: &mut usize) -> String {
+    let mut name = String::new();
+    while packet[*index] != 0 {
+        if packet[*index] & 0xC0 == 0xC0 {
+            // Name compression
+            let offset = ((packet[*index] as usize & 0x3F) << 8) | packet[*index + 1] as usize;
+            *index += 2;
+            if let Some(compressed_name) = parse_compressed_name(packet, offset) {
+                name.push_str(&compressed_name);
+            }
+            return name;
+        } else {
+            let length = packet[*index] as usize;
+            *index += 1;
+            if *index + length > packet.len() {
+                panic!("exceeded length")
+            }
+            if !name.is_empty() {
+                name.push('.');
+            }
+            name.push_str(&String::from_utf8_lossy(&packet[*index..*index + length]));
+            *index += length;
+        }
+    }
+    *index += 1;
+    name
+}
+
+fn parse_compressed_name(packet: &[u8], mut index: usize) -> Option<String> {
+    let mut name = String::new();
+    while packet[index] != 0 {
+        if packet[index] & 0xC0 == 0xC0 {
+            let offset = ((packet[index] as usize & 0x3F) << 8) | packet[index + 1] as usize;
+            index = offset;
+        } else {
+            let length = packet[index] as usize;
+            index += 1;
+            if index + length > packet.len() {
+                return None;
+            }
+            if !name.is_empty() {
+                name.push('.');
+            }
+            name.push_str(&String::from_utf8_lossy(&packet[index..index + length]));
+            index += length;
+        }
+    }
+    Some(name)
+}
+
 fn build_reverse_packet(addr: IpAddr) -> Vec<u8> {
     /*
                                     1  1  1  1  1  1
@@ -96,150 +320,6 @@ fn build_reverse_packet(addr: IpAddr) -> Vec<u8> {
     ]);
 
     packet
-}
-
-// TODO: handle cnames
-pub fn parse_dns_a_response(packet: &[u8]) -> Option<DnsARecord> {
-    if packet.len() < 12 {
-        return None;
-    }
-
-    let qdcount = u16::from_be_bytes([packet[4], packet[5]]);
-    let ancount = u16::from_be_bytes([packet[6], packet[7]]);
-    let mut index = 12;
-
-    let domain = parse_name(packet, &mut index)?;
-
-    // Skip the query section
-    index += 4; // 2 bytes for type and 2 bytes for class
-
-    let mut a_records = Vec::new();
-    for _ in 0..ancount {
-        let name = parse_name(packet, &mut index)?;
-        let rtype = u16::from_be_bytes([packet[index], packet[index + 1]]);
-        index += 2; // Type
-        index += 2; // Class
-        index += 4; // TTL
-        let rdlength = u16::from_be_bytes([packet[index], packet[index + 1]]) as usize;
-        index += 2;
-
-        if rtype == 1 && rdlength == 4 {
-            a_records.push(IpAddr::V4(Ipv4Addr::new(
-                packet[index],
-                packet[index + 1],
-                packet[index + 2],
-                packet[index + 3],
-            )));
-        }
-        index += rdlength;
-    }
-
-    if a_records.len() == 0 {
-        return None;
-    }
-
-    // strip outer quotes
-    Some(DnsARecord { domain, a_records })
-}
-
-fn parse_dns_response(response: &[u8]) -> Option<String> {
-    if response.len() < 12 {
-        return None;
-    }
-
-    let ancount = ((response[6] as u16) << 8) | response[7] as u16;
-    if ancount == 0 {
-        return None;
-    }
-
-    let mut pos = 12;
-
-    // Skip the question section
-    while response[pos] != 0 {
-        pos += response[pos] as usize + 1;
-    }
-    pos += 5;
-
-    // Process the answer section
-    for _ in 0..ancount {
-        // Skip the name field (could be a pointer)
-        if response[pos] & 0xC0 == 0xC0 {
-            pos += 2;
-        } else {
-            while response[pos] != 0 {
-                pos += response[pos] as usize + 1;
-            }
-            pos += 1;
-        }
-
-        // Check the type field (should be PTR)
-        let qtype = ((response[pos] as u16) << 8) | response[pos + 1] as u16;
-        if qtype != 0x000C {
-            return None;
-        }
-        pos += 2;
-
-        // Skip QCLASS, TTL, and RDLENGTH fields
-        pos += 8;
-
-        // Read the PTR record
-        let rdlength = ((response[pos - 2] as u16) << 8) | response[pos - 1] as u16;
-        let end = pos + rdlength as usize;
-
-        return parse_name(response, &mut pos);
-    }
-
-    None
-}
-
-fn parse_name(packet: &[u8], index: &mut usize) -> Option<String> {
-    let mut name = String::new();
-    while packet[*index] != 0 {
-        if packet[*index] & 0xC0 == 0xC0 {
-            // Name compression
-            let offset = ((packet[*index] as usize & 0x3F) << 8) | packet[*index + 1] as usize;
-            *index += 2;
-            if let Some(compressed_name) = parse_compressed_name(packet, offset) {
-                name.push_str(&compressed_name);
-            }
-            return Some(name);
-        } else {
-            let length = packet[*index] as usize;
-            *index += 1;
-            if *index + length > packet.len() {
-                return None;
-            }
-            if !name.is_empty() {
-                name.push('.');
-            }
-            name.push_str(&String::from_utf8_lossy(&packet[*index..*index + length]));
-            *index += length;
-        }
-    }
-    *index += 1;
-    Some(name)
-}
-
-fn parse_compressed_name(packet: &[u8], mut index: usize) -> Option<String> {
-    let mut name = String::new();
-    while packet[index] != 0 {
-        if packet[index] & 0xC0 == 0xC0 {
-            let offset = ((packet[index] as usize & 0x3F) << 8) | packet[index + 1] as usize;
-            index = offset;
-        } else {
-            let length = packet[index] as usize;
-            index += 1;
-            if index + length > packet.len() {
-                return None;
-            }
-            if !name.is_empty() {
-                name.push('.');
-            }
-            name.push_str(&String::from_utf8_lossy(&packet[index..index + length]));
-            index += length;
-        }
-    }
-    Some(name)
 }
 
 /* Returns the domain name pointed to by addr in the PTR record */
