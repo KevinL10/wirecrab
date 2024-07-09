@@ -22,7 +22,7 @@ Wirecrab uses `libpcap` as the packet capture interface. MacOS comes with `libpc
 ### Roadmap
 - [ ] Listen on all network interfaces
 - [x] Resolve IP reverse lookups with the DNS traffic capture
-- [ ] Handle AAAA records
+- [x] Handle AAAA records
 - [ ] Resolve CNAME results
 - [ ] Clean up terminal UI
 - [ ] Add option to flush system and browser DNS

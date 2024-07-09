@@ -73,13 +73,13 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
     let widths = [
         Constraint::Length(40),
-        Constraint::Length(10),
+        Constraint::Length(6),
         Constraint::Min(20),
     ];
     let table = Table::new(rows, widths)
         .column_spacing(2)
         .header(
-            Row::new(vec![" IP", "NUM PACKETS", "HOST"])
+            Row::new(vec![" IP", "# PKTS", "HOST"])
                 .style(Style::new().bg(Color::Green).fg(Color::Black))
                 .bottom_margin(1),
         )
