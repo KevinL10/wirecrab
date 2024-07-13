@@ -1,4 +1,3 @@
-use std::io::Read;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::vec;
 
@@ -6,8 +5,8 @@ use std::net::UdpSocket;
 
 // Google's DNS server
 // TODO: replace with local DNS server
-const DNS_SERVER: &str = "8.8.8.8:53";
-// const DNS_SERVER: &str = "192.168.2.1:53";
+// const DNS_SERVER: &str = "8.8.8.8:53";
+const DNS_SERVER: &str = "64.71.255.204:53";
 
 #[derive(Debug)]
 pub struct DnsDirectRecord {

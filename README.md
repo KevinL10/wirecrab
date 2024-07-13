@@ -25,4 +25,5 @@ Wirecrab uses `libpcap` as the packet capture interface. MacOS comes with `libpc
 - [x] Handle AAAA records
 - [ ] Resolve CNAME results
 - [ ] Clean up terminal UI
+- [ ] Use local DNS server
 - [ ] Add option to flush system and browser DNS

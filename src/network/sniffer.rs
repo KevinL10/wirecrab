@@ -74,7 +74,7 @@ impl Sniffer {
             .unwrap();
 
         // TODO: expand filter
-        cap.filter("src port 80 or src port 443", true).unwrap();
+        // cap.filter("src port 80 or src port 443", true).unwrap();
         cap.for_each(None, |packet| {
             let frame = ethernet::parse_ethernet_frame(packet.data);
 
@@ -93,7 +93,7 @@ impl Sniffer {
                 })
                 .expect("sniffer: failed to send ipv6 packet");
             } else {
-                panic!("unsupported ethertype {:?}", frame.ethertype);
+                // panic!("unsupported ethertype {:?}", frame.ethertype);
             }
         })
         .unwrap();

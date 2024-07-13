@@ -6,15 +6,12 @@ use std::{io, thread};
 use wirecrab::app::{App, AppResult};
 use wirecrab::event::{Event, EventHandler};
 use wirecrab::handler::handle_key_events;
-use wirecrab::network::dns::DnsDirectRecord;
 use wirecrab::network::sniffer::{Sniffer, SnifferPacket};
 use wirecrab::tui::Tui;
 
 fn main() -> AppResult<()> {
-    // Create an application.
     let mut app = App::new();
 
-    // Initialize the terminal user interface.
     let backend = CrosstermBackend::new(io::stderr());
     let terminal = Terminal::new(backend)?;
     let events = EventHandler::new(250);

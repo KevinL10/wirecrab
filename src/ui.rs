@@ -20,22 +20,6 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .constraints(vec![Constraint::Min(0), Constraint::Length(1)])
         .split(frame.size());
 
-    // let inner_layout = Layout::default()
-    //     .direction(Direction::Horizontal)
-    //     .constraints(vec![Constraint::Length(100)])
-    //     .split(outer_layout[0]);
-
-    let title = Title::from(" Wirecrab ".bold());
-    // let block = Block::bordered()
-    //     .title(title.alignment(Alignment::Center))
-    //     .title(
-    //         instructions
-    //             .alignment(Alignment::Center)
-    //             .position(Position::Bottom),
-    //     )
-    //     .border_set(border::THICK);
-
-    // iterate through app.hosts instead of app.entries.values() to maintain insert order
     let rows = app
         .hosts
         .iter()
