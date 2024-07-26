@@ -57,11 +57,15 @@ impl Sniffer {
             };
 
             let datagram = udp::parse_udp_packet(ip_payload);
-            let record = dns::DnsResourceRecord::parse_direct_record(datagram.data);
+            let message = dns::DnsMessage::parse(datagram.data);
 
-            if let Some(record) = record {
-                tx.send(record).unwrap();
-            }
+            // if message.questions[0].qtype != 12 {
+            //     println!("{:?}", message);
+            // }
+            // let record = dns::DnsResourceRecord::parse_direct_record(datagram.data);
+            // if let Some(record) = record {
+            //     tx.send(record).unwrap();
+            // }
         })
         .unwrap();
     }

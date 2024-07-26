@@ -26,17 +26,26 @@ pub struct DnsHeader {
 #[derive(Debug)]
 pub struct DnsQuestion {
     pub qname: String, // variable length
-    qtype: u16,        // 16 bits
-    qclass: u16,       // 16 bits
+    pub qtype: u16,    // 16 bits
+    pub qclass: u16,   // 16 bits
 }
 
 // https://www.ietf.org/rfc/rfc1035.txt - section 4.1
 #[derive(Debug)]
 pub struct DnsMessage {
-    questions: Vec<DnsQuestion>,
-    answers: Vec<DnsResourceRecord>,
+    pub questions: Vec<DnsQuestion>,
+    pub answers: Vec<DnsResourceRecord>,
     authorities: Vec<DnsResourceRecord>,
     additional: Vec<DnsResourceRecord>,
+}
+
+#[derive(Debug)]
+pub enum DNSRData {
+    A(Ipv4Addr),
+    AAAA(Ipv6Addr),
+    CNAME(String),
+    PTR(String),
+    UNIMPLEMENTED(),
 }
 
 #[derive(Debug)]
@@ -46,24 +55,26 @@ pub struct DnsResourceRecord {
     rclass: u16,   // 16 bits
     ttl: u32,      // 32 bits
     rdlength: u16, // 16 bits
-    rdata: Vec<u8>,
+    rdata: DNSRData,
 }
 
 impl DnsResourceRecord {
     fn parse(message: &[u8], index: &mut usize) -> DnsResourceRecord {
         let name = parse_name(message, index);
 
-        let rtype = ((message[*index] as u16) << 8) | (message[*index + 1] as u16);
-        let rclass = ((message[*index + 2] as u16) << 8) | (message[*index + 3] as u16);
-        let ttl = ((message[*index + 4] as u32) << 24)
-            | ((message[*index + 5] as u32) << 16)
-            | ((message[*index + 6] as u32) << 8)
-            | (message[*index + 7] as u32);
-        let rdlength = ((message[*index + 8] as u16) << 8) | (message[*index + 9] as u16);
+        let rtype = u16::from_be_bytes([message[*index], message[*index + 1]]);
+        let rclass = u16::from_be_bytes([message[*index + 2], message[*index + 3]]);
+        let ttl = u32::from_be_bytes([
+            message[*index + 4],
+            message[*index + 5],
+            message[*index + 6],
+            message[*index + 7],
+        ]);
+        let rdlength = u16::from_be_bytes([message[*index + 8], message[*index + 9]]);
+        *index += 10;
 
-        let rdata_start = *index + 10;
-        let rdata_end = rdata_start + rdlength as usize;
-        let rdata = message[rdata_start..rdata_end].to_vec();
+        let rdata_end = *index + rdlength as usize;
+        let rdata = DnsResourceRecord::parse_r_data(rtype, message, index);
 
         *index = rdata_end;
 
@@ -77,40 +88,31 @@ impl DnsResourceRecord {
         }
     }
 
-    pub fn parse_direct_record(message: &[u8]) -> Option<DnsDirectRecord> {
-        let message = DnsMessage::parse(message);
-        let domain = message.questions[0].qname.clone();
-        let mut records = Vec::new();
-
-        for answer in message.answers {
-            if answer.rtype == 1 {
-                // A Record
-                records.push(IpAddr::V4(Ipv4Addr::new(
-                    answer.rdata[0],
-                    answer.rdata[1],
-                    answer.rdata[2],
-                    answer.rdata[3],
-                )));
-            } else if answer.rtype == 28 {
-                // AAAA Record
-                records.push(IpAddr::V6(Ipv6Addr::new(
-                    u16::from_be_bytes([answer.rdata[0], answer.rdata[1]]),
-                    u16::from_be_bytes([answer.rdata[2], answer.rdata[3]]),
-                    u16::from_be_bytes([answer.rdata[4], answer.rdata[5]]),
-                    u16::from_be_bytes([answer.rdata[6], answer.rdata[7]]),
-                    u16::from_be_bytes([answer.rdata[8], answer.rdata[9]]),
-                    u16::from_be_bytes([answer.rdata[10], answer.rdata[11]]),
-                    u16::from_be_bytes([answer.rdata[12], answer.rdata[13]]),
-                    u16::from_be_bytes([answer.rdata[14], answer.rdata[15]]),
-                )));
-            }
+    pub fn parse_r_data(rtype: u16, message: &[u8], index: &mut usize) -> DNSRData {
+        if rtype == 1 {
+            return DNSRData::A(Ipv4Addr::new(
+                message[*index + 0],
+                message[*index + 1],
+                message[*index + 2],
+                message[*index + 3],
+            ));
+        } else if rtype == 28 {
+            return DNSRData::AAAA(Ipv6Addr::new(
+                u16::from_be_bytes([message[*index + 0], message[*index + 1]]),
+                u16::from_be_bytes([message[*index + 2], message[*index + 3]]),
+                u16::from_be_bytes([message[*index + 4], message[*index + 5]]),
+                u16::from_be_bytes([message[*index + 6], message[*index + 7]]),
+                u16::from_be_bytes([message[*index + 8], message[*index + 9]]),
+                u16::from_be_bytes([message[*index + 10], message[*index + 11]]),
+                u16::from_be_bytes([message[*index + 12], message[*index + 13]]),
+                u16::from_be_bytes([message[*index + 14], message[*index + 15]]),
+            ));
+        } else if rtype == 5 {
+            return DNSRData::CNAME(parse_name(message, index));
+        } else if rtype == 12 {
+            return DNSRData::PTR(parse_name(message, index));
         }
-
-        if records.len() == 0 {
-            return None;
-        }
-
-        Some(DnsDirectRecord { domain, records })
+        return DNSRData::UNIMPLEMENTED();
     }
 }
 
@@ -180,13 +182,18 @@ impl DnsQuestion {
 
 fn parse_dns_response(response: &[u8]) -> Option<String> {
     let message = DnsMessage::parse(response);
-    let mut index = 0;
     if message.answers.len() == 0 {
         return None;
     }
-    Some(parse_name(&message.answers[0].rdata, &mut index))
+
+    if let DNSRData::PTR(ptr) = &message.answers[0].rdata {
+        return Some(ptr.to_string());
+    }
+
+    return None;
 }
 
+// TODO: replace index with cursor
 fn parse_name(packet: &[u8], index: &mut usize) -> String {
     let mut name = String::new();
     while packet[*index] != 0 {

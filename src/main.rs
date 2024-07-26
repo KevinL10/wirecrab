@@ -1,5 +1,6 @@
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use std::env;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::mpsc;
 use std::{io, thread};
@@ -10,6 +11,9 @@ use wirecrab::network::sniffer::{Sniffer, SnifferPacket};
 use wirecrab::tui::Tui;
 
 fn main() -> AppResult<()> {
+    let args = env::args().collect::<Vec<_>>();
+    let debug = args.iter().any(|arg| arg == "--debug");
+
     let mut app = App::new();
 
     let backend = CrosstermBackend::new(io::stderr());
@@ -32,7 +36,9 @@ fn main() -> AppResult<()> {
     });
 
     let mut tui = Tui::new(terminal, events);
-    tui.init()?;
+    if !debug {
+        tui.init()?;
+    }
 
     while app.running {
         while let Ok(data) = rx.try_recv() {
@@ -43,7 +49,9 @@ fn main() -> AppResult<()> {
             app.update_dns_cache(data);
         }
 
-        tui.draw(&mut app)?;
+        if !debug {
+            tui.draw(&mut app)?;
+        }
 
         match tui.events.next()? {
             Event::Tick => app.tick(),
