@@ -77,12 +77,22 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 pub fn render_bottom_bar(app: &mut App, area: Rect, frame: &mut Frame) {
     let areas = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints(vec![Constraint::Length(6), Constraint::Min(0)])
+        .constraints(vec![
+            Constraint::Length(2),
+            Constraint::Length(6),
+            Constraint::Length(6),
+            Constraint::Min(0),
+        ])
         .split(area);
 
-    frame.render_widget(Span::from("Esc/Q"), areas[0]);
+    frame.render_widget(Span::from("C"), areas[0]);
+    frame.render_widget(
+        Span::from("Clear ").bg(Color::LightCyan).fg(Color::Black),
+        areas[1],
+    );
+    frame.render_widget(Span::from("Esc/Q"), areas[2]);
     frame.render_widget(
         Line::from("Quit").bg(Color::LightCyan).fg(Color::Black),
-        areas[1],
+        areas[3],
     );
 }

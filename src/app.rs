@@ -75,6 +75,7 @@ impl App {
     /// to the original query domain. *NOTE*: this assumption may not be valid.
     pub fn handle_dns_message(&mut self, data: DnsMessage) {
         for resource in data.answers {
+            // println!("{:?} {:?}", resource.rdata, resource.name);
             match resource.rdata {
                 DNSRData::CNAME(cname) => {
                     self.inv_cname_map.insert(cname, resource.name);
@@ -137,5 +138,12 @@ impl App {
         } else {
             Some(idx)
         });
+    }
+
+    pub fn clear(&mut self) {
+        self.entries.clear();
+        self.dns_cache.clear();
+        self.inv_cname_map.clear();
+        self.hosts.clear();
     }
 }
