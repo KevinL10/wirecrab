@@ -1,14 +1,21 @@
 # Wirecrab
 
-Monitor outgoing network requests in your terminal.
+Monitor outgoing network requests in your terminal with built-in DNS resolution.
 
 ![example](/static/ex3.png)
 
 Wirecrab currently supports IPv4 and IPv6 over Ethernet frames.
 
 
-### Usage
-To run Wirecrab:
+### Installation
+
+ Mac users:
+```
+brew tap kevinl10/wirecrab
+brew install wirecrab
+```
+
+To run Wirecrab directly:
 
 ```
 cargo run
