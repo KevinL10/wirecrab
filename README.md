@@ -2,7 +2,7 @@
 
 Monitor outgoing network requests in your terminal.
 
-![example](/static/ex2.png)
+![example](/static/ex3.png)
 
 Wirecrab currently supports IPv4 and IPv6 over Ethernet frames.
 

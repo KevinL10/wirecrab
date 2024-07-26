@@ -46,7 +46,7 @@ fn main() -> AppResult<()> {
         }
 
         while let Ok(data) = rx_dns.try_recv() {
-            app.update_dns_cache(data);
+            app.handle_dns_message(data);
         }
 
         if !debug {

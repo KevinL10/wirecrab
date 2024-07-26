@@ -9,6 +9,7 @@ use crate::network::ip;
 use crate::network::udp;
 
 use super::dns::DnsDirectRecord;
+use super::dns::DnsMessage;
 
 pub struct SnifferPacket {
     pub src: IpAddr,
@@ -35,7 +36,7 @@ impl Sniffer {
 
     // Listens for A and AAAA records and sends them back to the main thread
     // TODO: listen to CNAME
-    pub fn start_dns_capture(&self, tx: Sender<DnsDirectRecord>) {
+    pub fn start_dns_capture(&self, tx: Sender<DnsMessage>) {
         let mut cap = pcap::Capture::from_device(self.device.clone())
             .expect("failed to get capture")
             .immediate_mode(true)
@@ -59,6 +60,7 @@ impl Sniffer {
             let datagram = udp::parse_udp_packet(ip_payload);
             let message = dns::DnsMessage::parse(datagram.data);
 
+            tx.send(message).unwrap();
             // if message.questions[0].qtype != 12 {
             //     println!("{:?}", message);
             // }

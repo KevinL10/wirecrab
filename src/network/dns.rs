@@ -50,12 +50,12 @@ pub enum DNSRData {
 
 #[derive(Debug)]
 pub struct DnsResourceRecord {
-    name: String,  // variable length
-    rtype: u16,    // 16 bits
-    rclass: u16,   // 16 bits
-    ttl: u32,      // 32 bits
-    rdlength: u16, // 16 bits
-    rdata: DNSRData,
+    pub name: String,  // variable length
+    pub rtype: u16,    // 16 bits
+    pub rclass: u16,   // 16 bits
+    pub ttl: u32,      // 32 bits
+    pub rdlength: u16, // 16 bits
+    pub rdata: DNSRData,
 }
 
 impl DnsResourceRecord {
