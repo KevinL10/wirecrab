@@ -5,35 +5,44 @@ use crate::network::{
     ip,
     sniffer::SnifferPacket,
 };
-use std::{collections::HashMap, error, fs::File, io::Write, net::IpAddr};
+use std::{collections::HashMap, error, fs::File, hash::Hash, io::Write, net::IpAddr, slice::Iter};
 
 /// Application result type.
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
 
 #[derive(Debug)]
-pub struct NetworkEntry {
-    pub ip: IpAddr,
-    pub host: String,
+pub struct HostInfo {
+    // pub ip: IpAddr,
+    // pub host: String,
     pub num_packets: u32,
+}
+
+#[derive(Debug)]
+pub struct NetworkEntry<'a> {
+    pub ip: &'a IpAddr,
+    pub domain: Option<&'a String>,
+    pub info: &'a HostInfo,
 }
 
 /// Application.
 #[derive(Debug)]
 pub struct App {
-    // Mainain map insert order with a separate hosts vector
-    pub hosts: Vec<IpAddr>,
     pub state: TableState,
 
-    pub entries: HashMap<IpAddr, NetworkEntry>,
-    pub running: bool,
-
     // Mapping between ip address and hostname from live DNS traffic
-    pub dns_cache: HashMap<IpAddr, String>,
+    pub ip_to_domain: HashMap<IpAddr, String>,
+
+    // Mainain map insert order with a separate hosts vector
+    // TODO: abstract into a separate HashMap class
+    pub host_ips: Vec<IpAddr>,
 
     // Inverse mapping between a domain and its resolved CNAME. For example, if www.google.com
     // returns a CNAME record for www.l.google.com, we store the mapping {"www.l.google.com": "www.google.com"}
-    // We use this map to recursively resolve any CNAMEs to the original name
+    // If multiple records point to the same CNAME, we store the most recent resolution.
     pub inv_cname_map: HashMap<String, String>,
+
+    pub host_info: HashMap<IpAddr, HostInfo>,
+    pub running: bool,
 }
 
 impl Default for App {
@@ -41,10 +50,10 @@ impl Default for App {
         Self {
             running: true,
             state: TableState::new(),
-            hosts: Vec::new(),
-            entries: HashMap::new(),
-            dns_cache: HashMap::new(),
+            host_ips: Vec::new(),
             inv_cname_map: HashMap::new(),
+            ip_to_domain: HashMap::new(),
+            host_info: HashMap::new(),
         }
     }
 }
@@ -63,66 +72,62 @@ impl App {
         self.running = false;
     }
 
-    /// NOTE: we need to be careful about the order in which we handle DNS vs query messages. Even
-    /// though the DNS query will precede the actual request, we may process the DNS query only after
-    /// we've already updated the entry.
-    ///
-    /// To address this, we insert the ip->host mapping into both the DNS cache which the update_entries reads from,
-    /// and also retroactively update the entries table once we receive more information about that ip address
-    ///
     /// We assume that we process all CNAME resolution queries before the terminal query. In other words,
     /// when we process the terminal query, we will already have a graph mapping from all resolved CNAMES
     /// to the original query domain. *NOTE*: this assumption may not be valid.
     pub fn handle_dns_message(&mut self, data: DnsMessage) {
         for resource in data.answers {
-            // println!("{:?} {:?}", resource.rdata, resource.name);
             match resource.rdata {
                 DNSRData::CNAME(cname) => {
                     self.inv_cname_map.insert(cname, resource.name);
                 }
                 DNSRData::A(ipv4) => {
-                    self.dns_cache
-                        .insert(IpAddr::V4(ipv4), resource.name.clone());
-                    self.update_entry(IpAddr::V4(ipv4), resource.name);
+                    self.update_ip_domain_mapping(IpAddr::V4(ipv4), resource.name);
                 }
                 DNSRData::AAAA(ipv6) => {
-                    self.dns_cache
-                        .insert(IpAddr::V6(ipv6), resource.name.clone());
-                    self.update_entry(IpAddr::V6(ipv6), resource.name);
+                    self.update_ip_domain_mapping(IpAddr::V6(ipv6), resource.name);
                 }
                 _ => (),
             };
         }
     }
 
-    /// Update self.entries with the new resource name
-    pub fn update_entry(&mut self, ip: IpAddr, host: String) {
-        if !self.entries.contains_key(&ip) {
-            return;
+    /// Updates the ip-domain mapping so that the ip points to the domain after
+    /// handling any CNAME resolutions.
+    pub fn update_ip_domain_mapping(&mut self, ip: IpAddr, domain: String) {
+        let mut domain = domain;
+        while let Some(orig_domain) = self.inv_cname_map.get(&domain) {
+            domain = orig_domain.to_string();
         }
 
-        self.entries.entry(ip).and_modify(|entry| entry.host = host);
+        self.ip_to_domain.insert(ip, domain);
     }
 
-    pub fn update(&mut self, data: SnifferPacket) {
-        if !self.entries.contains_key(&data.src) {
-            self.hosts.push(data.src);
+    pub fn handle_packet(&mut self, data: SnifferPacket) {
+        if !self.host_info.contains_key(&data.src) {
+            self.host_ips.push(data.src);
         }
 
-        self.entries
+        self.host_info
             .entry(data.src)
             .and_modify(|e| (*e).num_packets += 1)
-            .or_insert(NetworkEntry {
-                ip: data.src,
-                host: if self.dns_cache.contains_key(&data.src) {
-                    self.dns_cache[&data.src].clone()
-                } else {
-                    let host = ip::translate_ip(data.src);
-                    self.dns_cache.insert(data.src, host.clone());
-                    host
-                },
-                num_packets: 1,
-            });
+            .or_insert(HostInfo { num_packets: 1 });
+    }
+
+    /// Returns a list of network entries to render, ordered by insertion time
+    pub fn entries_to_render(&self) -> impl Iterator<Item = NetworkEntry> {
+        self.host_ips.iter().map(|ip| {
+            let info = self
+                .host_info
+                .get(ip)
+                .expect(format!("missing ip {} in host info", ip).as_str());
+
+            NetworkEntry {
+                ip,
+                domain: self.ip_to_domain.get(ip),
+                info: info,
+            }
+        })
     }
 
     pub fn prev_entry(&mut self) {
@@ -133,7 +138,7 @@ impl App {
 
     pub fn next_entry(&mut self) {
         let idx = self.state.selected().unwrap_or(0);
-        self.state.select(if idx + 1 < self.hosts.len() {
+        self.state.select(if idx + 1 < self.host_ips.len() {
             Some(idx + 1)
         } else {
             Some(idx)
@@ -141,9 +146,9 @@ impl App {
     }
 
     pub fn clear(&mut self) {
-        self.entries.clear();
-        self.dns_cache.clear();
         self.inv_cname_map.clear();
-        self.hosts.clear();
+        self.host_ips.clear();
+        self.host_info.clear();
+        self.ip_to_domain.clear();
     }
 }

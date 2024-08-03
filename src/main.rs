@@ -42,7 +42,7 @@ fn main() -> AppResult<()> {
 
     while app.running {
         while let Ok(data) = rx.try_recv() {
-            app.update(data);
+            app.handle_packet(data);
         }
 
         while let Ok(data) = rx_dns.try_recv() {

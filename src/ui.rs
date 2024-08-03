@@ -21,36 +21,23 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .split(frame.size());
 
     let rows = app
-        .hosts
-        .iter()
-        .map(|host| {
-            let entry = app
-                .entries
-                .get(host)
-                .expect("missing host from entries map");
-
-            // if we could not resolve the entry host
-            let should_ignore = entry.host.len() < 2;
-
-            Row::new(vec![
-                Line::from(entry.ip.to_string()).style(Style::new().fg(if should_ignore {
-                    Color::DarkGray
-                } else {
-                    Color::White
-                })),
-                Line::from(entry.num_packets.to_string())
-                    .alignment(Alignment::Right)
-                    .style(Style::new().fg(if should_ignore {
-                        Color::DarkGray
-                    } else {
-                        Color::Green
-                    })),
-                Line::from(entry.host.clone()).style(Style::new().fg(if should_ignore {
-                    Color::DarkGray
-                } else {
-                    Color::White
-                })),
-            ])
+        .entries_to_render()
+        .map(|entry| {
+            if let Some(domain) = entry.domain {
+                Row::new(vec![
+                    Line::styled(entry.ip.to_string(), Color::White),
+                    Line::styled(entry.info.num_packets.to_string(), Color::Green)
+                        .alignment(Alignment::Right),
+                    Line::styled(domain.clone(), Color::White),
+                ])
+            } else {
+                Row::new(vec![
+                    Line::styled(entry.ip.to_string(), Color::DarkGray),
+                    Line::styled(entry.info.num_packets.to_string(), Color::DarkGray)
+                        .alignment(Alignment::Right),
+                    Line::styled(entry.ip.to_string(), Color::DarkGray),
+                ])
+            }
             .style(Style::new().fg(Color::Gray))
         })
         .collect::<Vec<_>>();
