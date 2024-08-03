@@ -1,7 +1,7 @@
 use ratatui::widgets::TableState;
 
 use crate::network::{
-    dns::{DNSRData, DnsDirectRecord, DnsMessage, DnsResourceRecord},
+    dns::{reverse_lookup, DNSRData, DnsDirectRecord, DnsMessage, DnsResourceRecord},
     ip,
     sniffer::SnifferPacket,
 };
@@ -32,6 +32,9 @@ pub struct App {
     // Mapping between ip address and hostname from live DNS traffic
     pub ip_to_domain: HashMap<IpAddr, String>,
 
+    // Mapping between ip address and hostname from reverse lookups (PTR records)
+    pub ip_to_domain_fallback: HashMap<IpAddr, String>,
+
     // Mainain map insert order with a separate hosts vector
     // TODO: abstract into a separate HashMap class
     pub host_ips: Vec<IpAddr>,
@@ -53,6 +56,7 @@ impl Default for App {
             host_ips: Vec::new(),
             inv_cname_map: HashMap::new(),
             ip_to_domain: HashMap::new(),
+            ip_to_domain_fallback: HashMap::new(),
             host_info: HashMap::new(),
         }
     }
@@ -96,8 +100,8 @@ impl App {
     /// handling any CNAME resolutions.
     pub fn update_ip_domain_mapping(&mut self, ip: IpAddr, domain: String) {
         let mut domain = domain;
-        while let Some(orig_domain) = self.inv_cname_map.get(&domain) {
-            domain = orig_domain.to_string();
+        while let Some(original_domain) = self.inv_cname_map.get(&domain) {
+            domain = original_domain.to_string();
         }
 
         self.ip_to_domain.insert(ip, domain);
@@ -106,6 +110,12 @@ impl App {
     pub fn handle_packet(&mut self, data: SnifferPacket) {
         if !self.host_info.contains_key(&data.src) {
             self.host_ips.push(data.src);
+
+            // Look up PTR record to resolve domain name
+            if let Some(domain) = reverse_lookup(data.src) {
+                self.ip_to_domain_fallback
+                    .insert(data.src, format!("!!: {}", domain));
+            }
         }
 
         self.host_info
@@ -124,7 +134,10 @@ impl App {
 
             NetworkEntry {
                 ip,
-                domain: self.ip_to_domain.get(ip),
+                domain: self
+                    .ip_to_domain
+                    .get(ip)
+                    .or(self.ip_to_domain_fallback.get(ip)),
                 info: info,
             }
         })
@@ -150,5 +163,6 @@ impl App {
         self.host_ips.clear();
         self.host_info.clear();
         self.ip_to_domain.clear();
+        self.ip_to_domain_fallback.clear();
     }
 }
